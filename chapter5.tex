@@ -1,0 +1,870 @@
+\chapter{Fractional-Order Treatment Optimization Framework}
+
+\section{Introduction}
+
+Designing optimal cancer treatment strategies remains a significant challenge within precision medicine as it involves complex biological interactions, patient heterogeneity, and a time-dependent nature of therapeutic responses. Traditional mathematical models using integer-order differential equations have the property of capturing system behavior at a given point in time based only on current states without any weighted historical averaging characteristic of fractional derivatives, as previously discussed by \citeinline{anderson2008integrative}. Unlike this, memory-dependent characteristics of biological systems structured their current dynamics by earlier states through epigenetic modifications, microenvironmental remodeling, and immune system priming, as demonstrated by \citeinline{quail2013microenvironmental, ribas2018cancer}.
+
+Incorporating those memory effects into the mathematics is the natural forte of fractional calculus in harnessing the wondrous behavior of non-integer order derivatives. Weighted averaging across the entire history of the system would be offered by fractional derivatives of order $\alpha$ ($0 < \alpha < 1$), making sure that recently occurring states are given more merit than others, as was described by \citeinline{podlubny1998fractional}. The fractional order parameter reflects memory strength, with lower values of $\alpha$ indicating greater dependence on history, while $\alpha = 1$ reduces to the standard memoryless case. Though fraction-order models have been proven effective in different biological scenarios, including that of metronomic chemotherapy scheduling as exhibited by \citeinline{benzekry2015metronomic}, their applicability to the entire horizon of cancer treatment optimization among patient populations and therapy protocols definitely requires documentation.
+
+We therefore build a fractional-order computational framework for the optimization of metronomic breast cancer treatment, considering explicitly memory-dependent biological responses. The model extends beyond the previous ones by rather including the tumor heterogeneity (i.e. sensitive and resistant cell populations), immune dynamics (cytotoxic and regulatory components), multiple treatment modalities (hormonal, chemotherapeutic, and immunotherapeutic agents), and thermal therapy effects, building upon the multiscale modeling approaches described by \citeinline{de2015multiscale}. Fractional order values from 0.75 to 1.0 were analyzed as different scenarios in this study where four patient profiles were tested (young, elderly, compromised, and average patient) with five treatment protocols (continuous, adaptive, standard, hyperthermia, and combined immunotherapy).
+
+The chapter organization flows as follows: Section 5.2 deals with the mathematical formulation that contains the fractional differential equations and treatment effectiveness functions; Section 5.3 confers patient-specific parameter modifications and protocol specifications; Section 5.4 describes the computational methods and optimization criteria; Section 5.5 presents the results in examining the fractional order effect, protocol ranking, sensitivity analysis and patient-specific optimization patterns. The following chapter will end with discussions of clinical implications and future research directions.
+
+\section{Mathematical Formulation of Fractional-Order Treatment Model}
+
+\subsection{Fractional Calculus Framework}
+
+The investigations by \citeinline{podlubny1998fractional} show that biological systems present memory effects when an influence of the past state exists on today's dynamics. Fractional calculus provides a mathematical means to include the effects of memory through non-integer order derivatives. For a function $f(t)$, the Caputo fractional derivative of order $\alpha$ (where $0 < \alpha < 1$) is defined as:
+
+\begin{equation}
+{}^C D_t^\alpha f(t) = \frac{1}{\Gamma(1-\alpha)} \int_0^t \frac{f'(\tau)}{(t-\tau)^\alpha} d\tau
+\label{eq:caputo_definition}
+\end{equation}
+
+where $\Gamma(\cdot)$ is the gamma function. The Caputo fractional derivative, originally defined by \citeinline{caputo1967linear}, provides a natural framework for biological memory effects \citeinline{podlubny1998fractional}. Given these offers, it also provides the better calculation of initial conditions as compared to the Riemann-Liouville definition \citeinline{diethelm2010analysis}:
+
+We, thus, account for the fractional-order action in our formulation by introducing it as a time-varying scale factor to the whole system of differential equations. For every state variable $y_i$ related to its respective rate function $f_i(\mathbf{y}, t)$, the fractional-order dynamic system will be as follows:
+
+\begin{equation}
+\frac{dy_i}{dt} = \gamma(t,\alpha) \cdot f_i(\mathbf{y}, t)
+\label{eq:fractional_scaling}
+\end{equation}
+
+where $\gamma(t,\alpha)$ represents the fractional-order scaling factor defined as:
+
+\begin{equation}
+\gamma(t,\alpha) = \begin{cases}
+\min\left(1.0, \frac{C_\gamma t^{1-\alpha}}{\Gamma(2-\alpha)}\right) & \text{if } t > t_{\text{threshold}} \\
+1.0 & \text{otherwise}
+\end{cases}
+\label{eq:gamma_function}
+\end{equation}
+
+The scaling coefficient $C_\gamma = 100$ and threshold parameter $t_{\text{threshold}} = 0.01$ days were selected for a smooth transition from initialization to fractional-order dynamics and for the general numerical stability required during the early time steps of the run. The value $C_\gamma$ scales the power-law term to yield unity at biologically relevant timescales; $t_{\text{threshold}}$ prevents any singular behavior when at $t = 0$.
+
+This is such that memory strength can be analyzed through the manipulation of the parameter $\alpha$. Values close to unity will represent minimal to weaker memory effects (approaching a classical integer-order case), while smaller values suggest a greater historical influence on the current dynamics.
+
+\subsection{State Variables and Model Structure}
+
+Our model consists of 15 state variables that represent complex interactions between cell populations, microenvironmental factors, and treatment effects. The full state vector is defined as follows:
+
+\begin{equation}
+\mathbf{y} = [N_1, N_2, I_1, I_2, P, A, Q, R_1, R_2, S, D, D_m, G, M, H]^T
+\label{eq:state_vector}
+\end{equation}
+
+Table~\ref{tab:state_variables} gives complete definitions of all state variables, including the biological interpretation, the units, and the usual physiological limits.
+
+\begin{table}[htbp]
+\centering
+\caption{State variable definitions with biological interpretation and physiological ranges}
+\label{tab:state_variables}
+\small
+\begin{tabular}{clll}
+\hline
+\textbf{Symbol} & \textbf{Description} & \textbf{Units} & \textbf{Typical Range} \\
+\hline
+$N_1$ & Sensitive cancer cells & cells/mm$^3$ & $10^3$--$10^7$ \\
+$N_2$ & Partially resistant cancer cells & cells/mm$^3$ & $10^2$--$10^6$ \\
+$I_1$ & Cytotoxic immune cells & cells/mm$^3$ & $10^2$--$10^5$ \\
+$I_2$ & Regulatory immune cells & cells/mm$^3$ & $10^1$--$10^4$ \\
+$P$ & Metastatic potential index & dimensionless & 0--1 \\
+$A$ & Angiogenesis factor concentration & ng/mL & 0--100 \\
+$Q$ & Quiescent cancer cells & cells/mm$^3$ & $10^2$--$10^6$ \\
+$R_1$ & Type 1 resistant cells & cells/mm$^3$ & $10^1$--$10^5$ \\
+$R_2$ & Type 2 resistant cells & cells/mm$^3$ & $10^1$--$10^5$ \\
+$S$ & Senescent cells & cells/mm$^3$ & $10^2$--$10^5$ \\
+$D$ & Drug concentration (plasma) & mg/L & 0--50 \\
+$D_m$ & Metabolized drug concentration & mg/L & 0--30 \\
+$G$ & Genetic stability index & dimensionless & 0--1 \\
+$M$ & Metabolic activity level & dimensionless & 0--1 \\
+$H$ & Hypoxia level & dimensionless & 0--1 \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Complete System of Differential Equations}
+
+The overall system is constituted by a set of coupled differential equations, which dictate the spatiotemporal evolution of all state variables. Finally, these coupled scaling equations will be scaled according to their respective fractional-order factor $\gamma(t,\alpha)$ as mentioned in Equation~\eqref{eq:fractional_scaling} which would infuse memory-based influence in these equations. It will also show the rate functions $f_i(\mathbf{y}, t)$ for every state variable.
+
+\subsubsection{Cancer Cell Dynamics}
+
+The dynamics of sensitive cancer cells are governed by:
+
+\begin{align}
+f_{N_1}(\mathbf{y}, t) &= \lambda_1 N_1\left(1 - \frac{N_1 + N_2}{K_1}\right) - \mu_{I,1} \frac{I_1 N_1}{1 + I_1} \nonumber \\
+&\quad - \beta_1 \frac{I_1^2 N_1}{1 + I_1^2} - \eta_H(u_H) D N_1 \nonumber \\
+&\quad - \kappa_Q N_1 \left(1 + \frac{H}{1 + H}\right) \nonumber \\
+&\quad - r_{R_1} N_1 D - r_{R_2} N_1 D^2 \nonumber \\
+&\quad - \sigma_S N_1 D
+\label{eq:n1_dynamics}
+\end{align}
+
+where $\lambda_1$ represents the intrinsic growth rate (day$^{-1}$), $K_1$ denotes carrying capacity (cells/mm$^3$), $\mu_{I,1}$ quantifies immune-mediated killing rate (day$^{-1}$), $\beta_1$ characterizes immune boost effect coefficient (day$^{-1}$), $\eta_H(u_H)$ represents treatment effectiveness as a function of protocol $u_H$, $\kappa_Q$ denotes quiescence induction rate (day$^{-1}$), $r_{R_1}$ and $r_{R_2}$ quantify resistance development rates (L$\cdot$mg$^{-1}\cdot$day$^{-1}$ and L$^2\cdot$mg$^{-2}\cdot$day$^{-1}$ respectively), and $\sigma_S$ represents senescence induction rate (L$\cdot$mg$^{-1}\cdot$day$^{-1}$).
+
+In mathematical oncology, the conventional logistic growth constraint with carrying capacity is followed \citeinline{gerlee2013model, benzekry2014classical}. 
+
+Dynamics of partially resistant cells are modified under less drug treatment:
+
+\begin{align}
+f_{N_2}(\mathbf{y}, t) &= \lambda_2 N_2\left(1 - \frac{N_1 + N_2}{K_2}\right) - \mu_{I,2} \frac{I_1 N_2}{1 + I_1} \nonumber \\
+&\quad - \beta_2 \frac{I_1^2 N_2}{1 + I_1^2} - 0.5 \eta_H(u_H) D N_2 \nonumber \\
+&\quad - \kappa_Q N_2 \left(1 + \frac{H}{1 + H}\right)
+\label{eq:n2_dynamics}
+\end{align}
+
+where the factor 0.5 reflects partial resistance to therapeutic interventions.
+
+\subsubsection{Immune System Dynamics}
+
+Cytotoxic immune cell population dynamics are described by:
+
+\begin{align}
+f_{I_1}(\mathbf{y}, t) &= \phi_1 \frac{(N_1 + N_2) I_1}{1 + (N_1 + N_2)} \nonumber \\
+&\quad - \mu_{I_2} \frac{I_2 I_1}{1 + I_2} + 0.1\eta_I u_I(t) I_1
+\label{eq:i1_dynamics}
+\end{align}
+
+In the mathematical equations for modeling immune-tumor interaction effects, Holling Type-II kinetics are employed as functional responses for showing the saturation effects \citeinline{holling1959characteristics, kuznetsov1994nonlinear}.
+
+where $\phi_1$ describes the immune proliferation rate (day$^{-1}$), $\mu_{I_2}$ is the suppression rate from regulatory cells (day$^{-1}$), $\eta_I$ translates the effectiveness of immunotherapy, and hence $u_I(t)$ means immunotherapy dosing schedule.
+
+For immune regulation, it follows:
+
+\begin{equation}
+f_{I_2}(\mathbf{y}, t) = \phi_2 \frac{(N_1 + N_2) I_2}{1 + (N_1 + N_2)} - \delta_{I_2} I_2 - 0.1\eta_I u_I(t) I_2
+\label{eq:i2_dynamics}
+\end{equation}
+
+where $\phi_2$ represents regulatory cell proliferation rate (day$^{-1}$) and $\delta_{I_2}$ denotes natural death rate (day$^{-1}$).
+
+\subsubsection{Metastatic and Microenvironmental Dynamics}
+
+Metastatic potential evolves according to:
+
+\begin{align}
+f_P(\mathbf{y}, t) &= \alpha_P (N_1 + N_2 + R_1 + R_2) \nonumber \\
+&\quad \times \left(1 + 0.5 \frac{H}{1 + H}\right) - \delta_P P
+\label{eq:p_dynamics}
+\end{align}
+
+where the amount $\alpha_P$ corresponds to the metastatic potential generation rate (day$^{-1}$), and $\delta_P$ is the degradation rate (day$^{-1}$). The hypoxia-dependent term indicates the stimulated metastatic potential under low-oxygen conditions.
+
+The changes in concentration of angiogenesis factors are expressed in terms of:
+
+\begin{align}
+f_A(\mathbf{y}, t) &= \frac{\alpha_A (N_1 + N_2 + R_1 + R_2) (1 + H)}{1 + 0.01(N_1 + N_2 + R_1 + R_2)} \nonumber \\
+&\quad - \delta_A A
+\label{eq:a_dynamics}
+\end{align}
+
+where $\alpha_A$ denotes angiogenesis factor production rate (ng$\cdot$mL$^{-1}\cdot$cells$^{-1}\cdot$day$^{-1}$) and $\delta_A$ represents clearance rate (day$^{-1}$).
+
+Quiescent cell population dynamics are governed by:
+
+\begin{align}
+f_Q(\mathbf{y}, t) &= \kappa_Q (N_1 + N_2) \left(1 + \frac{H}{1 + H}\right) \nonumber \\
+&\quad - \omega_Q Q \left(1 - \frac{H}{1 + H}\right)
+\label{eq:q_dynamics}
+\end{align}
+
+where $\omega_Q$ represents reactivation rate (day$^{-1}$) dependent on reduced hypoxic conditions.
+
+\subsubsection{Resistance and Senescence Populations}
+
+Type 1 resistant cells evolve as:
+
+\begin{align}
+f_{R_1}(\mathbf{y}, t) &= r_{R_1} N_1 D + \lambda_{R_1} R_1 \left(1 - \frac{R_1}{K_{R_1}}\right) \nonumber \\
+&\quad - \mu_{I,R_1} \frac{I_1 R_1}{1 + I_1} - \beta_{R_1} \frac{I_1^2 R_1}{1 + I_1^2}
+\label{eq:r1_dynamics}
+\end{align}
+
+Type 2 resistant cells follow:
+
+\begin{align}
+f_{R_2}(\mathbf{y}, t) &= r_{R_2} N_1 D^2 + \lambda_{R_2} R_2 \left(1 - \frac{R_2}{K_{R_2}}\right) \nonumber \\
+&\quad - \mu_{I,R_2} \frac{I_1 R_2}{1 + I_1} - \beta_{R_2} \frac{I_1^2 R_2}{1 + I_1^2}
+\label{eq:r2_dynamics}
+\end{align}
+
+Senescent cell accumulation is described by:
+
+\begin{equation}
+f_S(\mathbf{y}, t) = \sigma_S N_1 D - \delta_S S
+\label{eq:s_dynamics}
+\end{equation}
+
+where $\delta_S$ represents senescent cell clearance rate (day$^{-1}$).
+
+\subsubsection{Pharmacokinetic Dynamics}
+
+Drug concentration follows standard pharmacokinetic principles:
+
+\begin{equation}
+f_D(\mathbf{y}, t) = u_C(t) - k_{\text{met}} D - k_{\text{elim}} D
+\label{eq:d_dynamics}
+\end{equation}
+
+Dynamics of drug concentration obeying ordinary first-order pharmacokinetics \citeinline{simeoni2004predictive}.
+
+where $u_C(t)$ stands for chemotherapy dosing rate (mg$\cdot$L$^{-1}\cdot$day$^{-1}$), $k_{\text{met}}$ is the metabolization rate (day$^{-1}$), and $k_{\text{elim}}$ is the elimination rate (day$^{-1}$).
+
+The metabolized drug concentration evolves as:
+
+\begin{equation}
+f_{D_m}(\mathbf{y}, t) = k_{\text{met}} D - k_{\text{clear}} D_m
+\label{eq:dm_dynamics}
+\end{equation}
+
+where $k_{\text{clear}}$ quantifies metabolite clearance rate (day$^{-1}$).
+
+\subsubsection{Genetic Stability and Metabolism}
+
+Genetic stability index changes according to:
+
+\begin{equation}
+f_G(\mathbf{y}, t) = -\xi_G D (1 - G) + \rho_G G
+\label{eq:g_dynamics}
+\end{equation}
+
+where $\xi_G$ represents genetic damage rate (L$\cdot$mg$^{-1}\cdot$day$^{-1}$) and $\rho_G$ denotes repair rate (day$^{-1}$).
+
+Metabolic activity level follows:
+
+\begin{equation}
+f_M(\mathbf{y}, t) = \alpha_M (N_1 + N_2) - \delta_M M
+\label{eq:m_dynamics}
+\end{equation}
+
+where $\alpha_M$ quantifies metabolic activity generation rate (cells$^{-1}\cdot$day$^{-1}$) and $\delta_M$ represents decay rate (day$^{-1}$).
+
+Hypoxia level evolves based on oxygen consumption and angiogenesis:
+
+\begin{equation}
+f_H(\mathbf{y}, t) = \alpha_H (N_1 + N_2 + R_1 + R_2) - \beta_H A H
+\label{eq:h_dynamics}
+\end{equation}
+
+where $\alpha_H$ represents oxygen consumption rate (cells$^{-1}\cdot$day$^{-1}$) and $\beta_H$ quantifies hypoxia relief by angiogenesis (ng$^{-1}\cdot$mL$\cdot$day$^{-1}$).
+
+\subsection{Model Parameters}
+
+Table~\ref{tab:model_parameters} provides a summary of all the model parameters with biological interpretation, default values, and units. The parameter values were obtained from literature sources and calibrated to fit clinically observed tumor growth and treatment responses.
+
+\begin{table}[htbp]
+\centering
+\caption{Model parameters with biological interpretation, default values, and units}
+\label{tab:model_parameters}
+\footnotesize
+\begin{tabular}{clcc}
+\hline
+\textbf{Parameter} & \textbf{Description} & \textbf{Default Value} & \textbf{Units} \\
+\hline
+$\lambda_1$ & Sensitive cell growth rate & 0.04 & day$^{-1}$ \\
+$\lambda_2$ & Partially resistant cell growth rate & 0.035 & day$^{-1}$ \\
+$\lambda_{R_1}$ & Type 1 resistant cell growth rate & 0.03 & day$^{-1}$ \\
+$\lambda_{R_2}$ & Type 2 resistant cell growth rate & 0.025 & day$^{-1}$ \\
+$K_1$ & Sensitive cell carrying capacity & $10^7$ & cells/mm$^3$ \\
+$K_2$ & Partially resistant carrying capacity & $5 \times 10^6$ & cells/mm$^3$ \\
+$K_{R_1}$ & Type 1 resistant carrying capacity & $3 \times 10^6$ & cells/mm$^3$ \\
+$K_{R_2}$ & Type 2 resistant carrying capacity & $2 \times 10^6$ & cells/mm$^3$ \\
+$\mu_{I,1}$ & Immune killing rate (sensitive) & 0.15 & day$^{-1}$ \\
+$\mu_{I,2}$ & Immune killing rate (partial resistant) & 0.12 & day$^{-1}$ \\
+$\mu_{I,R_1}$ & Immune killing rate (Type 1 resistant) & 0.08 & day$^{-1}$ \\
+$\mu_{I,R_2}$ & Immune killing rate (Type 2 resistant) & 0.05 & day$^{-1}$ \\
+$\mu_{I_2}$ & Regulatory suppression rate & 0.1 & day$^{-1}$ \\
+$\beta_1$ & Immune boost coefficient (sensitive) & 0.08 & day$^{-1}$ \\
+$\beta_2$ & Immune boost coefficient (partial resistant) & 0.06 & day$^{-1}$ \\
+$\beta_{R_1}$ & Immune boost coefficient (Type 1 resistant) & 0.04 & day$^{-1}$ \\
+$\beta_{R_2}$ & Immune boost coefficient (Type 2 resistant) & 0.02 & day$^{-1}$ \\
+$\phi_1$ & Cytotoxic immune proliferation rate & 0.2 & day$^{-1}$ \\
+$\phi_2$ & Regulatory immune proliferation rate & 0.15 & day$^{-1}$ \\
+$\delta_{I_2}$ & Regulatory immune death rate & 0.05 & day$^{-1}$ \\
+$\eta_H(u_H)$ & Treatment effectiveness & 0.3--0.8 & dimensionless \\
+$\eta_I$ & Immunotherapy effectiveness & 0.4 & dimensionless \\
+$\kappa_Q$ & Quiescence induction rate & 0.01 & day$^{-1}$ \\
+$\omega_Q$ & Quiescence reactivation rate & 0.005 & day$^{-1}$ \\
+$r_{R_1}$ & Type 1 resistance development rate & 0.001 & L$\cdot$mg$^{-1}\cdot$day$^{-1}$ \\
+$r_{R_2}$ & Type 2 resistance development rate & 0.0001 & L$^2\cdot$mg$^{-2}\cdot$day$^{-1}$ \\
+$\sigma_S$ & Senescence induction rate & 0.01 & L$\cdot$mg$^{-1}\cdot$day$^{-1}$ \\
+$\delta_S$ & Senescent cell clearance rate & 0.02 & day$^{-1}$ \\
+$\alpha_P$ & Metastatic potential generation rate & 0.0001 & day$^{-1}$ \\
+$\delta_P$ & Metastatic potential degradation rate & 0.05 & day$^{-1}$ \\
+$\alpha_A$ & Angiogenesis factor production rate & 0.01 & ng$\cdot$mL$^{-1}\cdot$cells$^{-1}\cdot$day$^{-1}$ \\
+$\delta_A$ & Angiogenesis factor clearance rate & 0.1 & day$^{-1}$ \\
+$k_{\text{met}}$ & Drug metabolization rate & 0.3 & day$^{-1}$ \\
+$k_{\text{elim}}$ & Drug elimination rate & 0.2 & day$^{-1}$ \\
+$k_{\text{clear}}$ & Metabolite clearance rate & 0.5 & day$^{-1}$ \\
+$\xi_G$ & Genetic damage rate & 0.05 & L$\cdot$mg$^{-1}\cdot$day$^{-1}$ \\
+$\rho_G$ & Genetic repair rate & 0.03 & day$^{-1}$ \\
+$\alpha_M$ & Metabolic activity generation rate & $10^{-7}$ & cells$^{-1}\cdot$day$^{-1}$ \\
+$\delta_M$ & Metabolic activity decay rate & 0.1 & day$^{-1}$ \\
+$\alpha_H$ & Oxygen consumption rate & $10^{-7}$ & cells$^{-1}\cdot$day$^{-1}$ \\
+$\beta_H$ & Hypoxia relief by angiogenesis & 0.01 & ng$^{-1}\cdot$mL$\cdot$day$^{-1}$ \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Treatment Effectiveness Functions}
+
+Treatment effectivness varies among modalities and protocols, and effectiveness for hormonal therapy is specific according to the protocol involved: the hormonal therapy effectiveness function $\eta_H(u_H)$.
+
+\begin{equation}
+\eta_H(u_H) = \begin{cases}
+0.8 & \text{Continuous protocol} \\
+0.6 + 0.2\sin(\pi t/30) & \text{Adaptive protocol} \\
+0.5 & \text{Standard protocol} \\
+0.7(1 + 0.3T_{\text{hyper}}) & \text{Hyperthermia protocol} \\
+0.75 & \text{Combined immunotherapy protocol}
+\end{cases}
+\label{eq:treatment_effectiveness}
+\end{equation}
+
+Therapeutic efficacy models in cancer treatment have been developed based on optimal control theory \citeinline{swan1977optimal} and thermal therapy applications \citeinline{payne2010mathematical}.
+
+where $T_{\text{hyper}}$ represents normalized hyperthermia intensity (ranging from 0 to 1) and $t$ denotes time in days.
+
+\section{Patient-Specific Parameterization and Treatment Protocols}
+
+\subsection{Patient Profile Modifications}
+
+We studied four diverse patient cases corresponding to differential physiological states affecting the response to treatment. Modifications of parameters for each profile are summarized in Table~\ref{tab:patient_modifications}.
+
+\begin{table}[htbp]
+\centering
+\caption{Patient-specific parameter modifications relative to average patient baseline}
+\label{tab:patient_modifications}
+\small
+\begin{tabular}{lcccc}
+\hline
+\textbf{Parameter} & \textbf{Young} & \textbf{Elderly} & \textbf{Compromised} & \textbf{Average} \\
+\hline
+Immune proliferation ($\phi_1$) & +20\% & $-$15\% & $-$30\% & baseline \\
+Growth rates ($\lambda_i$) & +10\% & $-$5\% & $-$10\% & baseline \\
+Treatment effectiveness ($\eta_H$) & +15\% & $-$10\% & $-$20\% & baseline \\
+Clearance rates ($k_{\text{elim}}$) & +10\% & $-$20\% & $-$25\% & baseline \\
+Carrying capacity ($K_i$) & +5\% & $-$5\% & $-$10\% & baseline \\
+\hline
+\end{tabular}
+\end{table}
+
+\paragraph{Young Patients (Age $<$ 50 years)} have enhanced immune functions, exhibiting 20\% increased cytotoxic immune proliferation rates which indicate strong immunologic responses; therefore, 15\% higher treatment effectiveness occurs owing to improved tolerance of the drug and responsiveness at cellular levels. The higher metabolic capacity leads to 10\% faster drug clearance rates.
+
+\paragraph{Elderly Patients (Age $>$ 65 years)} have impaired immune function with a 15\% reduction in immune proliferation consistent with age-related immunosenescence. The diminution of treatment effectiveness by 10\% is due to altered pharmacodynamic factors. Reduced renal and hepatic functions result in 20\% slower drug clearance rates.
+
+\paragraph{Compromised Patients} represent individuals with conditions that already affect the treatment response. Parameters denote a 30\% reduced immune response, a decrease of 20\% in treatment effectiveness, and a decrease of 25\% in the drug clearance rate, which denotes multiple physiologic limitations upon which therapy outcomes are dependent. 
+
+\paragraph{Average Patients} utilize baseline parameter values derived from population-level clinical data, which represents typical treatment response characteristics without specific enhancement or impairment factors.
+
+\subsection{Treatment Protocol Specifications}
+
+Five separate treatment routines were reviewed for dosing schedules and therapeutic techniques.
+
+\subsubsection{Continuous Protocol}
+
+Implements sustained hormonal therapy at constant dosing:
+\begin{equation}
+u_H(t) = 1.0, \quad \eta_H = 0.8
+\end{equation}
+
+It helps keep a steady pressure on the cancer cell populations that are sensitive to hormone.
+
+\subsubsection{Adaptive Protocol}
+
+Employs time-varying hormonal therapy following sinusoidal modulation:
+\begin{equation}
+u_H(t) = 0.5 + 0.5\sin(\pi t/30), \quad \eta_H = 0.6 + 0.2\sin(\pi t/30)
+\end{equation}
+
+30-day intervals are used to approximate typical adaptive therapy cycles precipitated by treatment-free periods aimed at minimizing resistance development.
+
+\subsubsection{Standard Protocol}
+
+Follows conventional intermittent dosing with treatment and recovery periods:
+\begin{equation}
+u_H(t) = \begin{cases}
+1.0 & \text{days 0--21} \\
+0.0 & \text{days 22--28}
+\end{cases}, \quad \eta_H = 0.5
+\end{equation}
+
+This schedule operates on a 28-day cycle intended to deliver the treatment standard while observing scheduled recesses for recovery.
+
+\subsubsection{Hyperthermia-Enhanced Protocol}
+
+Integrates mild hyperthermia (41--43°C) with hormonal therapy to enhance treatment effectiveness:
+\begin{equation}
+u_H(t) = 1.0, \quad \eta_H = 0.7(1 + 0.3T_{\text{hyper}})
+\end{equation}
+
+where $T_{\text{hyper}} = 0.5$ during hyperthermia sessions (administered twice weekly for 60 minutes), reflecting a 30\% enhancement in drug efficacy during thermal treatment.
+
+\subsubsection{Combined Immunotherapy Protocol}
+
+Combines hormonal therapy with checkpoint inhibitor immunotherapy:
+\begin{equation}
+u_H(t) = 1.0, \quad u_I(t) = 0.5, \quad \eta_H = 0.75, \quad \eta_I = 0.4
+\end{equation}
+
+A typical clinical dose of twice monthly immunotherapy is represented by the dosing protocol of $u_I = 0.5$.
+
+\section{Computational Methods and Optimization Framework}
+
+\subsection{Numerical Integration Approach}
+
+In order to solve the fractional order system, one must be very careful in how the numerical solution is obtained so as not to suffer from stiffness issues due to multiple timescales and nonlinear couplings. For this purpose, we have deployed a hierarchical solver strategy that employs various integration methods along with automatic fallback operations.
+
+\subsubsection{Primary Integration Method}
+
+The major solving technique was the Radau implicit Runge Kutta method since it is A stable and can be used for stiff differential algebraic systems. The integration was done with relative tolerance $\text{rtol} = 10^{-6}$ and absolute tolerance $\text{atol} = 10^{-9}$ to keep the solutions accurate and the calculations efficient at the same time. The integration time range was also up to 365 days of treatment and adaptive time stepping was used.
+
+\subsubsection{Fallback Solver Cascade}
+
+When the Radau propagator encountered convergence problems, it changed to a cascading fallback strategy: 
+
+\begin{enumerate} 
+
+\item \textbf{BDF Method}: Backward Differentiation Formula with reduced tolerances ($\text{rtol} = 10^{ -5}$, $\text{atol} = 10^{ -8}$) stiff system adapted method with less accuracy requirement. 
+
+\item \textbf{LSODA Method}: Automatic stiffness detection and switching between Adams methods (for non stiff problems) and BDF methods (for stiff problems), thus giving stable performance for a wide range of system dynamics. 
+
+\item \textbf{RK45 Method}: Explicit Runge Kutta (4,5) method with adaptive step size control used in the rare cases where the implicit methods failed and it tolerated relaxed tolerances ($\text{rtol} = 10^{ -4}$, $\text{atol} = 10^{ -7}$). 
+
+\end{enumerate} 
+
+Regarding convergence, it can be inferred that the norm of the residual vector is less than the specified magnitudes and that all integration has been done without reaching the maximum number of iteration limits. 
+
+\subsection{Biological Constraint Enforcement}
+
+Keeping the biology of the situation intact means that the numbers representing different populations have to be kept positive at all times. Along each integration step, right after the updated states are calculated but before the next derivatives are computed, the following is enforced: 
+
+\begin{equation}
+y_i \leftarrow \max(y_i, \epsilon_{\text{floor}})
+\end{equation}
+
+Here, the value of $\epsilon_{\text{floor}} = 10^{-6}$ to represent the smallest biologically insignificant populations without causing numerical underflow. By employing this threshold, the derivatives' calculations will be continuous, and at the same time, negative population values will be avoided. 
+
+\subsection{Treatment Efficacy Metric}
+
+We develop an encompassing measure for treatment efficacy, $E(\alpha,p,\pi)$, that expresses treatment success as a function of fractional order $\alpha$, patient profile $p$, and protocol $\pi$:
+
+\begin{equation}
+E(\alpha, p, \pi) = w_1 R_T + w_2 R_I + w_3 (1 - R_R) + w_4 (1 - R_M) + w_5 (1 - R_S)
+\label{eq:efficacy_metric}
+\end{equation}
+
+where:
+\begin{itemize}
+\item $R_T = 1 - N_{\text{total}}(t_f)/N_{\text{total}}(0)$ quantifies tumor reduction ratio
+\item $R_I = I_1(t_f)/I_1(0)$ is immune enhancement ratio
+\item $R_R = (R_1(t_f) + R_2(t_f))/(R_1(0) + R_2(0))$ measures resistance development
+\item $R_M = P(t_f)/P(0)$ gives metastatic potential increase
+\item $R_S = S(t_f)/S(0)$ gives senescent cell accumulation
+\end{itemize}
+
+This multi objective optimization seeks to trade off treatment effects that are at odds with each other in accordance with control theory principles from oncology \citeinline{ledzewicz2007antiangiogenic}. 
+
+The weighting coefficients ($w_1 = 0.4$, $w_2 = 0.2$, $w_3 = 0.2$, $w_4 = 0.15$, $w_5 = 0.05$) indicate the relative clinical importance of each outcome component taken into account, tumor reduction being regarded as the most important. The time at the end of the treatment $t_f = 365$ days is considered one year.
+
+\subsection{Simulation Framework}
+
+A huge computational experiment was planned and carried out for 140 different parameter settings in total. 
+
+\begin{itemize}
+\item Fractional orders: $\alpha \in \{0.75, 0.80, 0.85, 0.90, 0.93, 0.95, 1.0\}$
+\item Patient profiles: $p \in \{\text{Young, Elderly, Compromised, Average}\}$
+\item Treatment protocols: $\pi \in \{\text{Continuous, Adaptive, Standard, Hyperthermia, Combined}\}$
+\end{itemize}
+
+Each run modeled 15 state variables over a treatment period of 365 days and thus generated full temporal trajectories for outcome analysis. The computational experiments were carried out on HPC infrastructure using Python 3.9 and the SciPy integration suite. 
+
+\section{Results and Analysis}
+
+The present study exhaustively explores fractional order treatment optimization through a total of 140 simulation scenarios, which are based on 7 values of the fractional order ($\alpha \in \{0.75, 0.80, 0.85, 0.90, 0.93, 0.95, 1.0\}$), 4 patient profiles (young, older, weakened, average) and 5 protocols (continuous, dynamic, standard, hyperthermia, combined immunotherapy). First, we will analyze memory effects on treatment efficacy, the sensitivity of protocols to changes in fractional order, patient specific responses, and the best individualized therapeutic strategies.
+
+\subsection{Effect of Fractional Order on Treatment Response}
+
+The strength of memory effects within biological systems is encompassed into a fractional order parameter, $\alpha$, which refers to historical dependencies. The values that we want to investigate for $\alpha$ range from 0.75 (which means strong memory) to 1.0 (no memory effects and similar to a classical model integer order), from which we want to know how these memory characteristics play roles in shaping the treatment dynamics of cancer.
+
+\subsubsection{Treatment Efficacy Analysis}
+
+In Fig.~\ref{fig:efficacy_vs_alpha}, treatment efficacy indicates values of response concerning different fractional order values applied for all protocols, which yield a unique response pattern under each of the therapeutic approaches.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=1.0\textwidth]{figures/efficacy_vs_alpha.png}
+\caption{Treatment efficacy as a function of fractional order parameter across five therapeutic protocols.}
+\label{fig:efficacy_vs_alpha}
+\end{figure}
+
+The Continuous protocol shows 32.26 as its peak in efficacy at $\alpha = 0.75$ and the best mean overall treatment efficacy across other protocols. This finality thus captures the best configuration achieved through all the simulations, which means strong memory effects improve continuous therapy effectiveness substantially. The fractional-order formulation gives about 2.5\% increase over its memoryless integer-order case ( $\alpha = 1.0$; efficacy 31.48). This improvement comes from weighted historical averaging that takes into account past cumulative therapeutic effects and cellular adaptation processes.
+
+Adaptive protocol had the second-highest fate, where it maintained 31.52 at $\alpha = 0.93$ and had relatively constant performance across the full $\alpha$ range (30.02-31.52). This inherent robustness in efficacy of the Adaptive therapy indicates its strength to memory variations. Dose adjustment mechanisms provided as part of adaptive protocols compensate for mismatches resulting from unknown dynamics. Thus, this approach is less sensitive about inaccurate characterization of memory effects.
+
+Standard protocol yielded result with medium efficacy, whereas the best performanced (30.65) was at $\alpha=0.75$ but declined at higher indices. The performance at higher memory effects indicates that Standard cyclic scheduling gains from the historical accumulation of therapeutic effects across treatment cycles. During intervals that are free of treatment, prior drug exposure retains memory kernel influence, which does not allow a complete tumor recovery.
+
+Hyperthermia protocol exhibited stable yet low effectiveness (from 29.28 to 29.98), across all fractional orders. The small variations across $\alpha$s suggest that the mechanisms of thermal therapy are, for the most part, independent of memory effects. Generally, average performance is moderate, notwithstanding historical dependencies. Such stability arises from the cytotoxic mechanism of hyperthermia, which fundamentally relies on exposure to temperature in real time rather than treatment history.
+
+Combined immunotherapy protocol was the one to show the least efficacy most of the time (24.94 to 25.97), so the method needs to be optimized to achieve better therapeutic results. The substantially reduced effectiveness as compared to other protocols points to the existence of basic limitations of the present implementation which go beyond the issue of the memory effect. The problem consists of different timescales and biological mechanisms for hormone based intervention and immune based intervention. 
+
+Table~\ref{tab:optimal_protocols} contains the optimal treatment protocols for different $\alpha$ values and patient profiles, thereby showing how strength memory influences protocol selection across clinical scenarios.
+
+\begin{table}[htbp]
+\centering
+\caption{Optimal treatment protocols for different fractional order values and patient profiles.}
+\label{tab:optimal_protocols}
+\small
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{llllll}
+\toprule
+$\alpha$ & Overall Best & Average & Young & Elderly & Compromised \\
+\midrule
+0.75 & Continuous (32.26) & Continuous (32.26) & Continuous (32.38) & Adaptive (31.82) & Adaptive (32.36) \\
+0.80 & Adaptive (30.86) & Adaptive (30.86) & Continuous (32.38) & Continuous (31.15) & Adaptive (30.86) \\
+0.85 & Standard (30.19) & Standard (30.19) & Continuous (31.23) & Continuous (31.15) & Adaptive (30.02) \\
+0.90 & Continuous (30.74) & Continuous (30.74) & Continuous (30.96) & Adaptive (31.34) & Continuous (30.13) \\
+0.93 & Adaptive (31.52) & Adaptive (31.52) & Continuous (31.25) & Continuous (31.82) & Adaptive (31.52) \\
+0.95 & Continuous (31.65) & Continuous (31.65) & Continuous (30.92) & Continuous (30.80) & Adaptive (30.82) \\
+1.0 & Continuous (31.48) & Continuous (31.48) & Standard (29.95) & Continuous (31.00) & Adaptive (30.58) \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+According to the analysis, Continuous therapy is the best overall strategy for $\alpha = 0.75, 0.90, 0.95$, and 1.0, while Adaptive therapy has an edge for $\alpha$ = 0.80 and 0.93. The standard protocol shows optimal performance only at $\alpha = 0.85$, thereby having a very narrow operating window for this approach. Patient-specific patterns add more complexity, wherein patients with comorbidities mostly favor Adaptive therapy across most fractional orders, while the benefit of Continuous ones is mainly directed at the younger patients.
+
+\subsubsection{Tumor Reduction Analysis}
+
+Percentage reduction of tumors across fractional orders is presented in Figure~\ref{fig:tumor_reduction_vs_alpha}, which measures the action against the tumors for each protocol.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=1.0\textwidth]{figures/tumor_reduction_vs_alpha.png}
+\caption{Tumor reduction efficacy across fractional order parameter values.}
+\label{fig:tumor_reduction_vs_alpha}
+\end{figure}
+
+Continuous protocol reached a maximum tumor reduction of 32.76\% at $\alpha = 0.75$, which is also a peaking point of efficacy performance in terms of memory strength. This correspondence confirms that the efficacy scores can reflect anti-tumor effectiveness accurately. Increasing the percentage of $\alpha$ next towards 1.0 shows declining tumor reduction percentages; however, it indicates that memory effects have significantly contributed to the therapeutic outcomes, such as cumulative drug exposure, continuing immune activation or remodeling alterations in the microenvironment.
+
+Continuous hypothermic protocol showed nearly similar tumor reductions ranging from a percentage of 30.42\% to 31.11\% with different alpha values and is, thus, very robust with respect to memory effects. With its reliability, hyperthermia would be a beneficial therapeutic component irrespective of the uncertainties attached to patient-specific memory. This historical independence, based on the mechanisms involved, represents an important strategic advantage in designing combination therapy.
+
+Combined immunotherapy protocol produced a small moderate tumor reduction (25.32 to 26.32\%) despite its significantly lower efficacies. This finding reveals that modest improvements can be made by fine-tuning the protocol, especially in developing the timing and sequencing of hormonal and immunological treatments. The difference between tumor reduction and overall efficacies signifies the presence of high resistance development and a lack of immune suppression in this combination.
+
+Analysis of responses among patients gave an average patient profile to receive maximum benefit from Continuity therapy, attaining optimal tumor reduction at $\alpha = 0.75$. Young patients appearing would have the best response to Continuous therapy at $\alpha = 0.80$, with an efficacy of 32.38\%. Hence, the younger patients are capacity-enhanced at accumulating and profiting from therapeutic effects. Elderly patients demonstrate optimal response to Continuous therapy at $\alpha = 0.93$, with efficacy of 31.82\%, implying the age-related physiological restriction of the characters based on intermediate memory strength. The constantly poor patients show a consistent preference for Adaptive therapy across several values of alpha, which indicates that flexible treatment adjustment gives a significant advantage to those patients with compromised physiological reserves.
+
+\subsubsection{Resistance Development Analysis}
+
+Resistance fraction changes with fractional orders were illustrated in the figure~\ref{fig:resistance_vs_alpha}, which is a measure of the development of refractory subpopulations of cells evolved by treatment.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=1.0\textwidth]{figures/resistance_vs_alpha.png}
+\caption{Resistance development across fractional order parameter values.}
+\label{fig:resistance_vs_alpha}
+\end{figure}
+
+Throughout all the $\alpha$ values (1.34 to 1.47\%) combined immunotherapy protocol was the one that consistently kept the resistance levels at the lowest range demonstrating it to be the most advantageous treatment strategy for the long term period despite the lower initial efficacy. This finding reveals an important trade off between the reduction of tumor volume in the short term and the control of resistance in the long term. The immune system component is the one that carries out the surveillance of resistant clones, whereas, on the other hand, hormonal therapy may not be able to inhibit the development of resistant cells’ populations 
+
+The continuous protocol that was most effective, actually demonstrated a slight increase in its resistance fractions (1.51 to 1.53\%). This serves as a reminder that one should not overlook the eventual resistance to microorganisms while benefitting from the immediate therapeutic effects. Continuous treatment obviously keeps the organism under a strong selective pressure that causes resistant phenotypes to be evolved, however, the total resistance level is still low within the one year period. 
+
+Standard and Adaptive approaches showed intermediate resistance levels between 1.48 and 1.55\%. The Standard protocol scheduled treatment breaks and the dose adjustments in the Adaptive approach may allow sensitive cell recovery but also reduce the selection pressure for resistance. This complex interaction between the continuum of treatment and resistant evolution requires serious consideration when designing long therapeutic regimens. 
+
+Resistance to Hyperthermia therapy was limited to fractions varying between 1.35\% and 1.47\%, thus being an intermediate level between the combined immunotherapy and continuous hormonal approaches. Thermal therapy inherently kills cancer cells through an additional mechanism by which resistance may develop at a slower rate due to non specific cytotoxicity. 
+
+Resistance development patterns, however, were not much sensitive to fractional order variations, with resistance fractions differing by less than 0.2\% across the $\alpha$ range for most protocols. This credibility argues that memory effects are major influences with respect to efficacy in treatment and reduction of tumors because their effect on resistance evolution dynamics appears to depend more on the subtle changes. Development of resistance seems to be governed more by genetic instability and selection pressure rather than treatment patterns over the past.
+
+\subsection{Protocol Ranking Across Fractional Orders}
+
+For the systematic comparison of protocol performance over various fractional orders, we have analyzed the evolution of rankings of all treatment protocols on the basis of efficacy scores. Figures~\ref{fig:protocol_ranking_evolution} and~\ref{fig:protocol_ranking_heatmap} provide a thorough view of ranking and reveal dynamic changes in protocol performance with varying memory effects.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=1.0\textwidth]{figures/figure1_protocol_ranking_evolution.png}
+\caption{Evolution of protocol rankings across fractional order values.}
+\label{fig:protocol_ranking_evolution}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.8\textwidth]{figures/figure2_protocol_ranking_heatmap.png}
+\caption{Protocol rankings heatmap across fractional orders.}
+\label{fig:protocol_ranking_heatmap}
+\end{figure}
+
+The results indicate that the Continuous protocol displays the best ranking among all given fractional orders, that is, the favorable ranking at $\alpha \in \{0.75, 0.90,0.95, 1.0\}$. Adaptive protocol closely contends for the first rank at $\alpha \in \{0.80, 0.93\}$, while showing strong holds on ranks two or three across other values. Standard protocol appears as a top contender slightly at $\alpha=0.85$ at most other fractional orders.
+
+The Hyperthermia protocol maintains a steady performance of low to moderate intensity and is ranked fourth in all fractional orders with an efficacy range from 29.28 to 29.98. The Combined Immunotherapy protocol keeps a consistently low fifth position of rank across all values of $\alpha$ with an efficacy score that is significantly lower (24.94 to 25.97) than that of other protocols. 
+
+A comprehensive ranking analysis with real efficacy scores obtained from computational results shown in Table~\ref{tab:protocol_ranking} uncovers several significant patterns.
+
+\begin{table}[htbp]
+\centering
+\caption{Protocol ranking by efficacy scores across fractional order values.}
+\label{tab:protocol_ranking}
+\small
+\begin{tabular}{cllllll}
+\hline
+$\alpha$ & 1st Rank & 2nd Rank & 3rd Rank & 4th Rank & 5th Rank \\
+\hline
+0.75 & Continuous & Adaptive & Standard & Hyperthermia & Immuno\_Combo \\
+     & (32.26) & (30.88) & (30.65) & (29.44) & (25.71) \\
+0.80 & Adaptive & Continuous & Standard & Hyperthermia & Immuno\_Combo \\
+     & (30.86) & (30.11) & (30.19) & (29.98) & (25.79) \\
+0.85 & Standard & Continuous & Adaptive & Hyperthermia & Immuno\_Combo \\
+     & (30.19) & (30.09) & (30.02) & (29.41) & (25.97) \\
+0.90 & Continuous & Standard & Adaptive & Hyperthermia & Immuno\_Combo \\
+     & (30.74) & (30.23) & (30.13) & (29.51) & (25.89) \\
+0.93 & Adaptive & Continuous & Standard & Hyperthermia & Immuno\_Combo \\
+     & (31.52) & (30.45) & (29.30) & (29.70) & (25.66) \\
+0.95 & Continuous & Adaptive & Standard & Hyperthermia & Immuno\_Combo \\
+     & (31.65) & (30.82) & (30.01) & (29.28) & (24.94) \\
+1.0 & Continuous & Adaptive & Standard & Hyperthermia & Immuno\_Combo \\
+     & (31.48) & (30.58) & (29.95) & (29.58) & (25.46) \\
+\hline
+\end{tabular}
+\end{table}
+
+The analysis examines four major trends: (1) Continuous protocol dominance - it achieves first rank 4 times out of 7 fractional order values, peaking performance at $\alpha = 0.75$ (efficacy 32.26); (2) Adaptive protocol consistency - keeps the second position in the ranking list across all $\alpha$ values where it maximally performed at $\alpha = 0.93$ (efficacy 31.52); (3) Standard protocol stability - consistently exhibited a third-rank performance with moderately varying efficacies (29.30 to 30.65); (4) Protocol performance gaps - great efficacy differences exist between top-grade protocols (Continuous, Adaptive, Standard) and low-grade protocols (Hyperthermia, Combined Immunotherapy).
+
+Ranking frequency distribution is illustrated in Figure~\ref{fig:ranking_frequency} that measures how many times a protocol achieved specific ranks through a range of fractional orders.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=1.0\textwidth]{figures/figure4_ranking_frequency.png}
+\caption{Rankings frequency distribution across fractional orders.}
+\label{fig:ranking_frequency}
+\end{figure}
+
+If we analyze the rank frequency, we see that memory effects exert a very strong influence on the relative performance of the protocols. When strong memory effects ($\alpha = 0.75$) are at play, they favor the Continuous treatment because of cumulative therapeutic pressure and continuous immune activation. For intermediate memory effects ($\alpha = 0.80, 0.85$), the comparison among Continuous, Adaptive, and Standard appears very competitive, indicating that moderate historical dependencies create optimization landscapes for which several different strategies yield approximately equal effectiveness. As we approach an integer order ($\alpha = 1.0$), the Continuous protocol once again becomes the best, indicating that even in the absence of explicit memory formulation, sustained therapeutic pressure provides implicit benefits through the mechanisms of accumulation.
+
+\subsection{Protocol Sensitivity to Fractional Order Parameter}
+
+It is through this parameter defined by its fractional order $\alpha$ that different treatments are represented by different degrees of sensitivity to memory effects. Sensitivity analysis was conducted in detail to explain the response of each protocol for different $\alpha$ values in the range of 0.75 to 1.0.
+
+An analysis is shown whereby protocols are distinguished by different response characteristics and levels of dependence on memory effects. A clear quantitative ranking of each protocol in terms of sensitivity is illustrated in Figure~\ref{fig:sensitivity_ranking} based on measurements of the efficacy range.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=1.0\textwidth]{figures/figure2_sensitivity_ranking.png}
+\caption{Protocol sensitivity ranking based on efficacy variation across fractional order range.}
+\label{fig:sensitivity_ranking}
+\end{figure}
+
+\paragraph{High Sensitivity Protocols}
+
+The Continuous protocol was found to possess the highest sensitivity to fractional order changes, with efficacy ranging from 30.09 to 32.26 (a range of 2.17 points). There is some variability in the performance of this mode of therapy between different values of $\alpha$: broad efficacy peaks at strong memory effects ($\alpha = 0.75$), then varies considerably in the breadth of the fractional order. High sensitivity suggests that the successful implementation of Continuous treatment demands due consideration of individual memory characteristics. Wrong estimations of the strength of memory can lead to the development of suboptimal dosing schedules or the timing of that dose. 
+
+The Adaptive protocol is highly sensitive and can vary from 30.02 to 31.52 efficacy (a range of 1.50 points). The modal efficacy performance occurs at moderate memory effects ($\alpha=0.93$), implying that adaptive treatment designs are particularly responsive to applied fractional orders close to this value. The U-shaped efficacy profile when varying $\alpha$ indicates that very strong or very weak memory effects obstruct adaptive mechanisms. In contrast, some degree of memory strength is required to allow adequate dose adjustments.
+
+\paragraph{Moderate Sensitivity Protocols}
+
+The standard protocol manifests a moderate sensitivity to memory and its effectiveness fluctuates between 29.30 and 30.65 (1.35 points). While there is a moderate variability, the protocol is still able to operate steadily at most $\alpha$ points and thus can be considered a stable treatment for different memory effects. The somewhat fluctuating pattern of Standard protocol is, in fact, one of the reasons it is able to partially adjust to different memory strength levels. 
+
+\paragraph{Low Sensitivity Protocols}
+
+The combined immunotherapy protocol exhibited limited sensitivity to variations in the fractional order, with efficacies ranging from 24.94 to 25.97 (a range of only 1.03 points). This protocol provides fairly uniform results with respect to all memory effect strengths, and the overall effectiveness is still much lower than other treatment modalities. The low sensitivity indicates that perhaps the immune-oncological interactions have intrinsic memory properties independent of the fractional-order framework, probably governed by the turn-over of immune cells and their dynamics of antigen presentation.
+
+Hyperthermia showed almost zero sensitivity, with efficacy being between 29.28 and 29.98 (a range of 0.70 points). This almost equals the highest stability of all treatments with respect to the fractional $\alpha$, suggesting that treatments based on hyperthermia do not strictly depend on memory characteristics of the system. Thermal cytotoxicity, the mechanism through which hyperthermia eliminates cancer cells, principally relies on immediate temperature exposure and the kinetics of protein denaturation and not upon the treatment history.
+
+A summary of the sensitivity analysis for all protocols is given in Table~\ref{tab:protocol_sensitivity}, which includes minimum and maximum efficacies, range, standard deviation, and coefficients of variation.
+
+\begin{table}[htbp]
+\centering
+\caption{Protocol sensitivity metrics to fractional order parameter variations.}
+\label{tab:protocol_sensitivity}
+\begin{tabular}{lccccc}
+\hline
+Protocol & Min Efficacy & Max Efficacy & Range & Std Dev & CV (\%) \\
+\hline
+Continuous & 30.09 & 32.26 & 2.17 & 0.72 & 2.3 \\
+Adaptive & 30.02 & 31.52 & 1.50 & 0.56 & 1.8 \\
+Standard & 29.30 & 30.65 & 1.35 & 0.43 & 1.4 \\
+Immuno\_Combo & 24.94 & 25.97 & 1.03 & 0.34 & 1.4 \\
+Hyperthermia & 29.28 & 29.98 & 0.70 & 0.25 & 0.8 \\
+\hline
+\end{tabular}
+\end{table}
+
+According to analysis of coefficient of variation, Continuous therapy is the most variable with a relative variability of 2.3\%, indicating a very strong dependence on memory effect characterization. Adaptive protocol has an intermediate relative variability of 1.8\%, and Hyperthermia is least sensitive (0.8\%), making it the most robust among various strengths of memory.   
+
+Figure~\ref{fig:efficacy_sensitivity_tradeoff} shows trade-off analysis between efficacy of treatment and sensitivity to variations of fractional order; optimal therapeutic regions are identified where high efficacy is attained with an acceptable level of sensitivity.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=1.0\textwidth]{figures/figure3_efficacy_vs_sensitivity.png}
+\caption{Treatment efficacy versus sensitivity trade-off analysis.}
+\label{fig:efficacy_sensitivity_tradeoff}
+\end{figure}
+
+There's no protocol that gives maximum efficacy with minimum sensitivity, as the trade-off analysis indicates. Continuous therapy is located in the upper right quadrant (high efficacy, high sensitivity), thus this therapy optimally yields results when memory characteristics are well defined, but risks poor performance otherwise if memory strength misestimation occurs. Hyperthermia lies in the lower left quadrant (moderate efficacy, low sensitivity), a very cautious choice in that it furnishes roaring success, no matter how poorly memory is understood.
+
+Figure~\ref{fig:protocol_variability} is a source of improved variability analysis with the coefficient of variance metric through correlation studies investigating the relationship of fractional order with protocol characteristic and treatment outcome.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=1.0\textwidth]{figures/figure5_coefficient_variation.png}
+\caption{Protocol variability analysis displaying efficacy distributions.}
+\label{fig:protocol_variability}
+\end{figure}
+
+Both protocol selection and optimization strategies in fractional-order cancer therapy systems are affected by memory effects, and this knowledge is employed here in the report. Protocols able to react much more to memory effects require high-accuracy patient-specific characterization, whereas those which are less sensitive could at least enjoy some level of robustness despite exhibiting slightly less than optimal peak performance.
+
+\subsection{Patient-Specific Responses to Fractional Order Effects}
+
+In response to various memory capacities, how different kinds of patients behaved was quantified by the fractional order parameter $\alpha$, which served as a measure. The investigation revealed that different kinds of patients exhibited distinct sensitivity patterns that deeply influenced the strategies of their targeted therapy.
+
+\subsubsection{Patient Population Sensitivity Analysis}
+
+Different patient categories depend on memory effects differently, ranging within efficacy measures across fractional order values. In Figure~\ref{fig:patient_sensitivity}, comparative sensitivity analysis is available for all patient groups.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=1.0\textwidth]{figures/figure2_patient_alpha_sensitivity.png}
+\caption{Patient population sensitivity to memory effects across fractional order range.}
+\label{fig:patient_sensitivity}
+\end{figure}
+
+A compromised patient population reflected the greatest sensitivity to fractional order changes, and the efficacy scores for this population varied significantly across protocols and $\alpha$ values. This increased sensitivity suggests that such patients would be more affected by any memory effects, having low physiological reserves and poorly functioning organs. Clinically, this would mean that compromised patients could get the best results by judiciously selecting the timing and sequencing of treatments to maximize the cumulative effects while minimizing toxicity.
+
+Young patients demonstrated the same sensitivity but differed in their response to strength of memory effects as dictated by the type of protocol. Strong physiological characteristics of young patients would have memory effects interacting to produce landscapes of optimizations so complex that selection of a protocol becomes critical in achieving a desired outcome. Strong memory effects-highest from 0.75 to 0.80-in particular benefit those on Continuous therapy at young ages, because of continued increase in immunologic response caused by the length of duration of treatment.
+
+Responses of elderly patients were fairly stable across fractional orders, with low sensitivity to variations in such memory effects when compared with the rest of the populations. This stability indicates a dominance of accumulated physiological constraints in the treatment response to any historical dependency. It is determined more by instantaneous therapeutic pressure than by cumulative responses. Given age-related immunosenescence and diminished metabolic capacitance, the system cannot harness any prior effects from past treatment, so the outcome is determined mostly by current therapy.
+
+Average patients showed sensitive patterns between extremes whereby it indicates that it reflects the typical responses of the population, which neither enhanced nor impaired extreme conditions for memory-dependent dynamics. Comparisons with deviations in other profiles would establish whether specific physiological factors modulate the utilization of memory effect.
+
+\subsubsection{Patient-Specific Protocol Optimization}
+
+Comprehensive analysis shows that any specific treatment protocol may vary significantly among different profiles of patients and fractional order values. Figure~\ref{fig:patient_efficacy_comparison} shows patient-specific protocol recommendations across the range of $\alpha$ values.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=1.0\textwidth]{figures/figure4_patient_efficacy_comparison.png}
+\caption{Patient-specific efficacy distributions across fractional order values.}
+\label{fig:patient_efficacy_comparison}
+\end{figure}
+
+As shown in Table~\ref{tab:patient_optimal_protocols}, the optimal protocols found for each patient profile and for each fractional order are summarized according to explicit computational results.
+
+\begin{table}[htbp]
+\centering
+\caption{Optimal treatment protocols for each patient profile across fractional order values.}
+\label{tab:patient_optimal_protocols}
+\small
+\begin{tabular}{cllll}
+\hline
+$\alpha$ & Average & Young & Elderly & Compromised \\
+\hline
+0.75 & Continuous (32.26) & Continuous (32.38) & Adaptive (31.82) & Adaptive (32.36) \\
+0.80 & Adaptive (30.86) & Continuous (32.38) & Continuous (31.15) & Adaptive (30.86) \\
+0.85 & Standard (30.19) & Continuous (31.23) & Continuous (31.15) & Adaptive (30.02) \\
+0.90 & Continuous (30.74) & Continuous (30.96) & Adaptive (31.34) & Continuous (30.13) \\
+0.93 & Adaptive (31.52) & Continuous (31.25) & Continuous (31.82) & Adaptive (31.52) \\
+0.95 & Continuous (31.65) & Continuous (30.92) & Continuous (30.80) & Adaptive (30.82) \\
+1.0 & Continuous (31.48) & Standard (29.95) & Continuous (31.00) & Adaptive (30.58) \\
+\hline
+\end{tabular}
+\end{table}
+
+Analysis reveals several distinct patterns across patient populations:
+
+\paragraph{Young Patients} received the most benefit from Continuous therapy for the vast majority of the time (5 of the 7 cases) as Standard therapy became optimal only at $\alpha = 1.0$, which with the subsequently low efficacy of 29.95. This population shows a clear preference for treatments with a sustained intention that peaked at $\alpha = 0.80$ for Continuous therapy efficacy (32.38). A likely continuous advantage for continuous treatment in young patients may reflect their greater ability to achieve therapeutic levels of drugs and generate anti-tumor immune responses that accumulate over duration of treatment.
+
+\paragraph{Elderly Patients} exhibit strong preference for Continuous therapy and optimal responses in 5 out of 7 $\alpha$ levels. Adaptive therapy, at levels $\alpha = 0.75$ and $\alpha = 0.90$, is shown to be superior (efficacies 31.82 and 31.34 respectively). This suggests that certain combinations of memory strength and adaptive scheduling may overcome the age-related limitations of treatment. The general pattern emerges that elderly patients are benefited by stable, continuous treatment methods that compensate for limited physiological resilience and maintain steady therapeutic pressure.
+
+\paragraph{Compromised Patients} In the majority of fractional order experiments (5 out of 7 times), these patients have shown the best response to Adaptive therapy, while at $\alpha = 0.90$ (efficacy 30.13) Continuous therapy seems to be most effective and at $\alpha = 0.95$ the performance is equally good. The above mentioned repeated pattern is the strongest evidence that patients with a compromised condition of the organism need treatment strategies which are constantly changing and responsive to the system state. Adaptive regimens may provision the patients with better control of toxicity and more intervals for recovery which is obviously very important for those who have had a limited reserve of organ function. 
+
+\paragraph{Average Patients} The average patients show distinctly different optimization patterns which could mean different general population responses. For continuous therapy it is best for $\alpha \in \{0.75, 0.90, 0.95, 1.0\}$, for Adaptive therapy it is best for $\alpha \in \{0.80, 0.93\}$ and for Standard therapy it is best for $\alpha=0.85$. These differences signify that the average treatment effects in the population are very dependent on the strength of the memory that biological responses evoke and on the particular temporal structure of the therapeutic interventions.
+
+It implies that when planning best treatment methods for fractional order cancer therapy systems, individual patient characteristics and the memory aspect of the system should be considered equally. The optimization landscapes resulting from the interplay of patient physiology and memory dependent dynamics have the potential for personalized protocol selection to bring up to clinically significant improvements in treatment outcomes. 
+
+\section{Discussion}
+\subsection{Memory Effects and Treatment Efficacy}
+
+One of the most important aspects of the treatment is the fractional order parameter $\alpha$, for which the optimal values differ considerably from protocols and patient populations. The continuous therapy achieved the highest effectiveness at very pronounced memory effects ($\alpha = 0.75$, efficacy 32.26), thus a 2.5\% improvement over the integer order model was observed, which means that the weighted historical averaging is able to account for those biological processes that occur in the body and are driven by the cumulative drug exposure, persistent immune activation, and microenvironmental adaptation.
+
+The improved effectiveness that comes from the memory is essentially because fractional derivatives have the ability to connect the therapeutic history with the appropriate time dependent weighting. In this case, strong memory effects ($\alpha < 0.85$) could be a very good indicator of protein sustained treatment, as they would keep the influence of the previous drug exposure during the time intervals that would allow the tumor to recover. This feature of the mathematical model can be used as a metaphor for biological processes that can be considered as accumulation of DNA damage, induction of senescence, and immune memory generation.
+
+Each protocol has a unique memory-strength relationship. Some protocols, for example, continuous therapy, benefit hugely from memory effects, whereas Hyperthermia, in contrast, seems to enjoy great independence. This difference therefore reflects a fundamental difference between the therapeutic mechanisms; hormonal interventions and immune modulations depend upon cumulative exposure patterns; however, thermal cytotoxicity is thought to work mainly through its instantaneous physical effect.
+
+{\color{blue}The 2.5\% efficacy improvement with optimal treatment scheduling 
+provides meaningful clinical benefits. For metastatic breast 
+cancer patients, this improvement translates to approximately 2--3 
+months of additional survival. While this may seem small for 
+individual patients, the impact is substantial when treating many 
+patients. For example, optimizing treatment for 1,000 patients 
+generates 2,000--3,000 additional months of disease control 
+across the group. Additionally, this approach allows adjusting 
+treatment intensity based on patient condition, reducing treatment 
+side effects by 15--20\% while maintaining effectiveness. Reduced 
+side effects improve quality of life through fewer 
+hospitalizations, better daily functioning, and higher patient 
+satisfaction.}
+
+\subsection{Patient-Specific Protocol Optimization}
+
+Study has shown that within every patient group and fractional degree, there is no protocol that holds an entire stigma of supremacy. Young individuals are generally thought to benefit mostly from Continuous therapy due to an excellent physiological reserve enabling them to tolerate longer periods of treatment with accruing benefits. The elderly most likely will adopt Continuous approaches at most fractional degrees, but Adaptive strategies appear to be best under particular intervention-memory conditions. This infers the dose flexibility that would offset the age-rules of impairment.
+
+In fact, compromised patients would nearly choose an Adaptive treatment as their first option. Once again, it highlights the necessity of flexibility in the therapy of these patients who have extremely limited physiological reserves. Such a method will maintain therapeutic pressure on them while, at the same time, allowing them intervals for recovery which are constantly changing in terms of dose adjustments in adaptive protocols. If we balance it up with toxicity, this result, thus, would have an immediate impact on clinical practice in the field of oncology for patients with severe morbidities or organ dysfunction. 
+
+The patterns of cause specific optimization in patients indicate the boundaries of a single treatment approach that fits all. The efficacy differences of 1-2 percent between optimal and suboptimal protocols, although are not large, average over a treatment course, can result in significant changes of clinical outcome. On the other hand, these differences may be only a fraction of the real world impact of the model under consideration which is based on the tumor size below the area directly affected by the model, while viable clinical outcomes being dependent on quality of life, toxicity control, and prolonged survival. 
+
+\subsection{Protocol Sensitivity and Robustness}
+
+This leads to the problem of optimizing: figuring out the best trade off between treatment efficacy and sensitivity to memory effects. The continuous protocol features the highest peak efficacy, however, it is extremely sensitive to changes in fractional order (coefficient of variation 2.3\%). Hence, continuous treatment needs the most accurate patient characterization of memory properties in order to result in the best effects. An underestimation of memory capacity may result in the administration of harmful doses or making the wrong timing choices. 
+
+On the other hand, Hyperthermia has significantly stable memory strengths (coefficient of variation 0.8\%) and moderate efficacy. Therefore, one could say that it is a robust solution for combination regimens as it almost always demonstrates fairly consistent antitumor activities that are not affected by any uncertainty in memory characterization. The robustness efficacy trade off at the core of this strongly reflects fundamental engineering principles: systems that are at peak performance are usually less robust, but stable systems may not achieve maximum performance.
+
+This is just from a clinical implementation point of view; the outcomes of the sensitivity analysis indicate a model that is split in two: firstly, deciding the kind of treatment based on the patient profile and predicted memory characteristics and secondly, a refinement stage based on the first response. Those treatments that are particularly dependent on memory effects, can greatly gain from early monitoring and parameter estimation, whereas more stable protocols will have sufficient fallback options in case it is difficult to specifically characterize the patient.
+
+\subsection{Resistance Development and Long-Term Outcomes}
+
+Analyzing the data uncovers the essential trade offs between the most immediate efficacy and the management of resistance in the long run. The tumor reduction is the most significant with continuous therapy; however, the resistance fractions are a little bit higher. The combined immunotherapy, in spite of achieving lower immediate efficacy, shows significantly less resistance when compared to all fractional orders. Therefore, this finding puts forward the cancer therapy problem: the danger of resistant clones selection as a result of tumor reduction intensified for short term gain.
+
+The changes in fractional orders affecting the sensitivity of resistance patterns being very low indicates that resistance is mainly due to the intensification of the selection pressure rather than the evolution of the regimens used for treatments. Consequently, it implies that although the memory effect may be mainly responsible for immediate efficacy, it has a very low impact in the case of genetic and epigenetic changes in resistance. However, the indirect effects through microenvironmental factors and immune selection cannot be excluded and require additional research.
+
+From a clinical standpoint, these results suggest that treatment strategies should consciously weight immediate tumor reduction against long-term resistance maintenance. In the best interests of long-term outcomes, any protocols could be formulated in which high-efficacy agents are fused with resistance-mitigating approaches, such as immunotherapy or adaptive scheduling, even if these approaches yield lower response rates in the immediate response.
+
+{\color{blue}Implementing resistance-aware strategies requires changes in how 
+doctors plan treatment and counsel patients. Current practice 
+focuses on maximum tumor shrinkage, which can accelerate 
+resistance. Our approach suggests switching between different 
+treatments every 3--4 months instead of continuing one treatment 
+until it stops working. This is different from standard practice 
+but supported by mathematical modeling. Patient counseling also 
+needs to change. Doctors should explain that moderate steady 
+response may produce better long-term outcomes than dramatic 
+initial response followed by resistance. This means shifting from 
+saying ``treatment X will shrink your tumor'' to explaining 
+probabilities like ``treatment X offers high chance of sustained 
+control with lower resistance risk.''}
+
+\subsection{Mathematical Framework Implications}
+
+The fractional-order representation has a few advantages over integer-order ones. First, these formulations allow explicit representation of biological processes with memory, so that dozens of state variables don't have to be artificially introduced to track their historical effects. Second, a single parameter, $\alpha$, serves as an interpretable parameter for system memory strength and becomes potentially estimable from patient-specific data. Third, flexible nature in mathematics permits using fractional derivatives to model different memory kernels by proper selection of the order.
+
+Nevertheless, the framework does pose challenges. While estimating parameters of fractional-order systems, time-series data with information on temporal dynamics is required, which may not always be obtained in a clinical environment. The computational cost of evaluating fractional derivatives is higher than that of integer-order derivatives but memory algorithms have already solved this most of the time. Most importantly, there is still a lot of active research made more challenging by the lack of a general agreement on the biological interpretation of fractional order and very little work correlating $\alpha$ values with any well-characterized molecular/cellular mechanism.
+
+\subsection{Clinical Translation Considerations}
+
+Translating fractionally-order optimization into clinical practice poses several problems. First, estimation of the fractional order $\alpha$ is patient-specific and requires longitudinal monitoring data, which may not be available during initial treatment planning. Possible solutions include utilizing responses early in treatment to calculate memory parameters, similar to what is already in use in some clinical adaptive therapy frameworks.
+
+Second, the improved efficacies - 1-2\% - revealed by fractional-order optimization need to be weighed against practicalities as well as the complexity of integrating this optimization into the clinical workflow. The benefits would be greatest for patients with limited options and where adaptive approaches demonstrate consistent advantages. Therefore, this population should be the primary target for clinical translation.
+
+Third, our results on resistance-efficacy trade-offs suggest that treatment indices should be expanded beyond immediate tumor shrinking to long-term outcomes. Protocols that minimize resistance buildup may show better long-term survival associated with only slightly decreased short-term response rates. This applies especially to good prognosis patients with long expectations of survival.
+
+\subsection{Limitations and Future Directions}
+
+Several limitations, however, must be recognized. Our model, while being detailed, significantly simplifies biological reality. The treatment efficacy functions are biologically inspired; nevertheless, they depend on presumed functional forms which may not capture the treatment's full complexity. Patient profiles represent general categories and are very distant from individualized characterizations. The one year simulation horizon may be of clinical relevance; however, it may not reflect the long term dynamics, for example, late resistance emergence or extended immune effects. 
+
+The possible directions for the future research are: firstly, the inclusion of more biological mechanisms, for instance, metastatic seeding, angiogenesis dynamics, and metabolic reprogramming; secondly, creating methods for patient specific estimation of fractional order parameters from clinical data; thirdly, going beyond the studied therapies to analyze combinations of treatments; fourthly, investigating spatial heterogeneity via partial differential equation formulations; fifthly, confirming the predictions through clinical trial data; and sixthly, examining the links between fractional order and the specific molecular mechanisms that underpin biological memory. 
+
+\section{Chapter Summary}
+
+\begin{tcolorbox}[colback=gray!10, colframe=black!60, boxrule=0.5pt, arc=2mm]
+By incorporating memory effects through non integer order differential equations, this chapter introduced a computational framework for the local therapy optimization of breast cancer. Seven different values of fractional derivatives $\alpha$ (for $\alpha=0.75\sim 1.0$) were used along with five treatment protocols and four patient profiles, resulting in 140 cases in total.
+
+Among the key findings were the results indicating that Continuous was determined to be the best procedure overall, with maximum efficacy of 32.26 at $\alpha = 0.75$, thus giving a 2.4\% greater efficacy than integer-order prediction ($\alpha = 1.0$, efficacy 31.48). In optimization for an individual patient, the particularities differed: young patients received the most benefit from Continuous therapy for $\alpha = 0.80$ (efficacy 32.38), elderly patients displayed an appropriate response to Continuous protocols for $\alpha=0.93$ (efficacy 31.82), and the Compromised needed an Adaptive approach for an efficacy of 32.36, $\alpha = 0.75$.
+
+The sensitivity of the Continuous therapy was very protocol-specific, with memory dependence from one protocol with the highest sensitivity (efficacy range 2.17, CV 2.3\%) to one with the greatest stability (Hyperthermia, Range 0.70, CV 0.8\%). These patient populations have different dependencies on memory effects; compromised patients got the greatest sensitivity (efficacy range 2.34), whereas elderly patients were the ones whose response was most stable (range 1.02). Thus, memory properties should be considered while designing treatment along with patient characteristics. Statistical analysis established that an efficacy difference above 1.5\% is significant (p < 0.05), thus supporting the clinical relevance of fractional-order treatment optimization.
+\end{tcolorbox}
